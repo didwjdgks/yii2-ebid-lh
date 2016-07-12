@@ -10,7 +10,7 @@ class WorkController extends \yii\console\Controller
 
   public function actionSuc(){
     $worker=new \GearmanWorker;
-    $worker->addServers($this->gman_server);
+    $worker->addServers($this->module->gman_server);
     $worker->addFunction('ebidlh_suc_work',[SucWorker::className(),'work']);
     while($worker->work());
   }

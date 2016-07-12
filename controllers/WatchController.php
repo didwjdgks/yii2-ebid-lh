@@ -9,6 +9,8 @@ use yii\helpers\ArrayHelper;
 use ebidlh\WatchEvent;
 use ebidlh\watchers\SucWatcher;
 
+use ebidlh\models\BidKey;
+
 class WatchController extends \yii\console\Controller
 {
   public $gman_client;
@@ -49,7 +51,15 @@ class WatchController extends \yii\console\Controller
     $this->stdout(join(',',$row)."\n");
 
     if(ArrayHelper::isIn($row['status'],['공개','유찰'])){
-      $this->gman_client->doBackground('ebidlh_suc_work',Json::encode($row));
+      $bidkey=BidKey::findOne([
+        'whereis'=>'05',
+        'notinum'=>$row['notinum'].'-'.$row['subno'],
+      ]);
+      if($bidkey!==null){
+        if($row['status']==='유찰' && $bidkey->bidproc==='F') return;
+        if($row['status']==='공개' && $bidkey->bidproc==='S') return;
+        $this->gman_client->doBackground('ebidlh_suc_work',Json::encode($row));
+      }
     }
   }
 }

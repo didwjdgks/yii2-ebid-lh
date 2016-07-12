@@ -46,7 +46,7 @@ class SucWatcher extends \yii\base\Component
     if($msg==='ready'){
       $this->post=[
         's_bidnmKor'=>'',
-        's_openDtm1'=>date('Y/m/d',strtotime('-1 month')),
+        's_openDtm1'=>date('Y/m/d',strtotime('-7 day')),
         's_openDtm2'=>date('Y/m/d'),
         's_cstrtnJobGbCd'=>'',
         's_bidNum'=>'',
