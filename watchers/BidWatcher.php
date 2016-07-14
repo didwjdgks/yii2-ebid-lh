@@ -1,20 +1,16 @@
 <?php
 namespace ebidlh\watchers;
 
-use yii\helpers\Console;
-
 use ebidlh\WatchEvent;
 
-class SucWatcher extends \yii\base\Component
+class BidWatcher extends \yii\base\Component
 {
-  const URL='http://ebid.lh.or.kr/ebid.et.tp.cmd.TenderOpenListCmd.dev';
+  const URL='http://ebid.lh.or.kr/ebid.et.tp.cmd.BidMasterListCmd.dev';
 
-  public $pub;
-  public $sub;
-
+  private $pub;
+  private $sub;
   private $post;
   private $module;
-
   private $channel;
 
   public function init(){
@@ -32,15 +28,15 @@ class SucWatcher extends \yii\base\Component
 
   public function watch(){
     $this->channel=\Yii::$app->security->generateRandomString();
-    $this->pub->publish('ebidlh-suc',[
+    $this->pub->publish('ebidlh-bid',[
       'cmd'=>'open-watch',
       'channel'=>$this->channel,
     ]);
     try {
       $this->sub->subscribe([$this->channel],[$this,'onSubscribe']);
-    }catch(\RedisException $e){
+    }
+    catch(\RedisException $e){
       $this->sub->close();
-      Console::endProgress();
       throw $e;
     }
   }
@@ -48,15 +44,10 @@ class SucWatcher extends \yii\base\Component
   public function onSubscribe($redis,$chan,$msg){
     if($msg==='ready'){
       $this->post=[
-        's_bidnmKor'=>'',
-        's_openDtm1'=>date('Y/m/d',strtotime('-7 day')),
-        's_openDtm2'=>date('Y/m/d'),
-        's_cstrtnJobGbCd'=>'',
-        's_bidNum'=>'',
+        's_tndrdocAcptOpenDtm'=>date('Y/m/d',strtotime('-1 day')),
+        's_tndrdocAcptEndDtm'=>date('Y/m/d',strtotime('+3 month')),
         'pageSpec'=>'default',
         'targetRow'=>1,
-        'devonOrderBy'=>'',
-        'selectednum'=>'',
       ];
       $this->pub->publish($this->channel.'-client',[
         'url'=>self::URL,
@@ -64,32 +55,38 @@ class SucWatcher extends \yii\base\Component
       ]);
       return;
     }
+
     $html=iconv('euckr','utf-8//IGNORE',$msg);
-    $html=strip_tags($html,'<tr><td><option>');
+    $html=strip_tags($html,'<tr><td>');
     $html=preg_replace('/<td[^>]*>/i','<td>',$html);
 
-    if(strpos($html,'한국정보인증(주)의 보안S/W를 설치중입니다')>0){
-      return;
-    }
+    if(strpos($html,'한국정보인증(주)의 보안S/W를 설치중입니다')>0) return;
 
-    $p='#<tr onclick="fn_dds_open\(\'\d{7}\', \'(?<subno>\d{2})\',[^>]*>'.
+    $p='#<tr onclick="fn_dds_open\(\'\d{7}\', \'(?<subno>\d{2})\', \'(?<param3>\d{2})\', \'(?<param4>.)\'\)[^>]*>'.
         ' <td>(?<notinum>\d{7})</td>'.
         ' <td>(?<bidtype>[^<]*)</td>'.
-        ' <td>(?<bidcls>[^<]*)</td>'.
+        ' <td>(?<bidproc>[^<]*)</td>'.
         ' <td>(?<constnm>[^<]*)</td>'.
-        ' <td>(?<constdt>\d{4}/\d{2}/\d{2} \d{2}:\d{2})</td>'.
+        ' <td>(?<contract>[^<]*)</td>'.
+        ' <td>(?<closedt>[^<]*)</td>'.
+        ' <td>(?<local>[^<]*)</td>'.
         ' <td>(?<status>[^<]*)</td>'.
        ' </tr>#i';
-    if(preg_match_all(str_replace(' ','\s*',$p),$html,$matches,PREG_SET_ORDER)){
+    $p=str_replace(' ','\s*',$p);
+    if(preg_match_all($p,$html,$matches,PREG_SET_ORDER)){
       foreach($matches as $m){
         $row=[
           'notinum'=>trim($m['notinum']),
           'subno'=>trim($m['subno']),
           'bidtype'=>trim($m['bidtype']),
-          'bidcls'=>trim($m['bidcls']),
+          'bidproc'=>trim($m['bidproc']),
           'constnm'=>trim($m['constnm']),
-          'constdt'=>trim($m['constdt']),
+          'contract'=>trim($m['contract']),
+          'closedt'=>trim($m['closedt']),
+          'local'=>trim($m['local']),
           'status'=>trim($m['status']),
+          'param3'=>trim($m['param3']),
+          'param4'=>trim($m['param4']),
         ];
         $event=new WatchEvent;
         $event->row=$row;
@@ -105,26 +102,17 @@ class SucWatcher extends \yii\base\Component
       throw new \Exception('total_page is null');
     }
     $page=ceil($this->post['targetRow']/10);
-
-    if($page===1){
-      Console::startProgress(0,$total_page);
-      Console::updateProgress(1,$total_page);
-    }else{
-      Console::updateProgress($page,$total_page);
-    }
-    
+    echo "page: $page/$total_page\n";
     if($page==$total_page){
       $this->pub->publish($this->channel.'-client',[
         'url'=>'close',
         'post'=>'',
       ]);
       $this->sub->close();
-      Console::endProgress();
       return;
     }else{
       $this->post['targetRow']+=10;
     }
-
     sleep(mt_rand($this->module->delay_min,$this->module->delay_max));
     $this->pub->publish($this->channel.'-client',[
       'url'=>self::URL,

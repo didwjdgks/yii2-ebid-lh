@@ -7,6 +7,7 @@ use yii\helpers\Console;
 use yii\helpers\ArrayHelper;
 
 use ebidlh\WatchEvent;
+use ebidlh\watchers\BidWatcher;
 use ebidlh\watchers\SucWatcher;
 
 use ebidlh\models\BidKey;
@@ -22,6 +23,25 @@ class WatchController extends \yii\console\Controller
   }
 
   public function actionBid(){
+    $watcher=new BidWatcher;
+    $watcher->on(WatchEvent::EVENT_ROW,[$this,'onBidRow']);
+
+    while(true){
+      try{
+        $watcher->watch();
+      }
+      catch(\Exception $e){
+        $this->stdout($e.PHP_EOL,Console::FG_RED);
+        Yii::error($e,'ebidlh');
+      }
+      
+      $this->stdout(sprintf("[%s] Peak memory usage: %sMb\n",
+        date('Y-m-d H:i:s'),
+        (memory_get_peak_usage(true)/1024/1024),
+        Console::FG_GREY
+      ));
+      sleep(mt_rand($this->module->delay_min,$this->module->delay_max));
+    }
   }
 
   public function actionSuc(){
@@ -46,9 +66,13 @@ class WatchController extends \yii\console\Controller
     }
   }
 
-  public function onSucRow($event){
+  public function onBidRow($event){
     $row=$event->row;
     $this->stdout(join(',',$row)."\n");
+  }
+
+  public function onSucRow($event){
+    $row=$event->row;
 
     if(ArrayHelper::isIn($row['status'],['공개','유찰'])){
       $bidkey=BidKey::findOne([

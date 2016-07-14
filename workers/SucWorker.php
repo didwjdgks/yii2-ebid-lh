@@ -14,7 +14,6 @@ class SucWorker extends \yii\base\Object
 
   public static function work($job){
     $workload=$job->workload();
-    echo $workload,PHP_EOL;
     $workload=Json::decode($workload);
 
     $module=\ebidlh\Module::getInstance();
@@ -36,6 +35,8 @@ class SucWorker extends \yii\base\Object
       if($bidkey===null){
         throw new \Exception('개찰: 입찰공고 미등록 공고입니다. ('.$workload['notinum'].')');
       }
+
+      static::print_bid($bidkey);
 
       if(ArrayHelper::keyExists('status',$workload) && $workload['status']==='유찰'){
         if($bidkey->bidproc==='F' and !ArrayHelper::keyExists('force',$workload)){
@@ -161,6 +162,13 @@ class SucWorker extends \yii\base\Object
     }
     catch(PassException $e){
     }
+    catch(\RedisException $e){
+      $sub->close();
+      echo Console::renderColoredString('%rRedisException: '.$e->getMessage().'%n'),PHP_EOL;
+      $gman_client=new \GearmanClient;
+      $gman_client->addServers($module->gman_server);
+      $gman_client->doBackground('ebidlh_suc_work',$job->workload());
+    }
     catch(\Exception $e){
       $sub->close();
       echo Console::renderColoredString("%r$e%n"),PHP_EOL;
@@ -173,6 +181,18 @@ class SucWorker extends \yii\base\Object
             (memory_get_peak_usage(true)/1024/1024)
           )."%n"
     ),PHP_EOL;
+  }
+
+  public static function print_bid(BidKey $bidkey){
+    $out=[];
+    switch($bidkey->bidtype){
+      case 'con': $out[]=Console::renderColoredString('%y[공사]%n'); break;
+      case 'ser': $out[]=Console::renderColoredString('%g[용역]%n'); break;
+      case 'pur': $out[]=Console::renderColoredString('%b[구매]%n'); break;
+    }
+    $out[]=$bidkey->constnm;
+    $out[]="({$bidkey->notinum})";
+    echo join(' ',$out),PHP_EOL;
   }
 }
 

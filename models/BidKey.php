@@ -16,6 +16,10 @@ class BidKey extends \yii\db\ActiveRecord
     ];
   }
 
+  public function saveCancelProc(){
+    if(!$this->isNewRecord) return false;
+  }
+
   public function beforeSave($insert){
     if(parent::beforeSave($insert)){
       if($this->notinum) $this->notinum=iconv('utf-8','euckr',$this->notinum);
